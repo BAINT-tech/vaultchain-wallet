@@ -1,383 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>VaultChain Web Wallet — EVM + Solana</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multi-Chain Wallet</title>
+  </head>
+  <body style="font-family: monospace; padding: 20px;">
+    <h1>🌐 Multi-Chain Wallet (EVM + Solana)</h1>
+    <div id="app"></div>
 
-  <!-- React + Babel (for quick GitHub Pages deploy) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script type="module">
+      import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.7.1/dist/ethers.min.js";
+      import * as solanaWeb3 from "https://cdn.jsdelivr.net/npm/@solana/web3.js@1.78.0/+esm";
 
-  <!-- Tailwind for UI -->
-  <script src="https://cdn.tailwindcss.com"></script>
+      const app = document.getElementById("app");
 
-  <!-- Ethers and Solana web3 -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.6.4/ethers.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/dist/web3.min.js"></script>
+      let wallet = null;
 
-  <!-- bip39 + ed25519-hd-key (for deriving same mnemonic -> solana keypair) -->
-  <script src="https://cdn.jsdelivr.net/npm/bip39@3.0.4/browser.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ed25519-hd-key@1.2.0/dist/index.umd.js"></script>
-
-  <style>
-    html,body,#root { height: 100%; }
-  </style>
-</head>
-<body class="bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 text-white">
-  <div id="root" class="max-w-3xl mx-auto p-6"></div>
-
-  <script type="text/babel">
-    const { useState, useEffect } = React;
-
-    // Chain RPCs - public nodes (for reliability use Alchemy/QuickNode/Ankr in production)
-    const RPCS = {
-      ETH: { name: "Ethereum", rpc: "https://rpc.ankr.com/eth", symbol: "ETH", explorerPrefix: "https://etherscan.io/tx/" },
-      BSC: { name: "BNB Smart Chain", rpc: "https://bsc-dataseed.binance.org/", symbol: "BNB", explorerPrefix: "https://bscscan.com/tx/" },
-      AVAX: { name: "Avalanche C-Chain", rpc: "https://api.avax.network/ext/bc/C/rpc", symbol: "AVAX", explorerPrefix: "https://snowtrace.io/tx/" },
-      BASE: { name: "Base", rpc: "https://mainnet.base.org", symbol: "ETH", explorerPrefix: "https://basescan.org/tx/" },
-      SOL: { name: "Solana (mainnet)", rpc: "https://api.mainnet-beta.solana.com", symbol: "SOL", explorerPrefix: "https://explorer.solana.com/tx/" }
-    };
-
-    function toBase64(uint8) {
-      // helper for storing solana secret in base64
-      return btoa(String.fromCharCode(...uint8));
-    }
-    function fromBase64ToUint8(s) {
-      const binary = atob(s);
-      const arr = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
-      return arr;
-    }
-
-    function App() {
-      const [selectedChain, setSelectedChain] = useState("ETH");
-      const [mnemonic, setMnemonic] = useState("");
-      const [walletState, setWalletState] = useState(null); // { mnemonic, evm: {address, privateKey}, sol: {address, secretBase64} }
-      const [importMnemonicInput, setImportMnemonicInput] = useState("");
-      const [importPrivKeyInput, setImportPrivKeyInput] = useState("");
-      const [sending, setSending] = useState(false);
-      const [txTo, setTxTo] = useState("");
-      const [txAmount, setTxAmount] = useState("");
-      const [solHistory, setSolHistory] = useState([]);
-      const [evmHistory, setEvmHistory] = useState([]);
-      const [notice, setNotice] = useState("");
-
-      useEffect(() => {
-        // If wallet present and chain SOL, auto-fetch sol history
-        if (walletState && selectedChain === "SOL") fetchSolHistory();
-        // If EVM chain selected and wallet present, clear sol history
-        if (walletState && selectedChain !== "SOL") setSolHistory([]);
-      }, [walletState, selectedChain]);
-
-      // ---------- Wallet creation & import (mnemonic-derived for both EVM & Solana) ----------
-      async function createWalletFromMnemonic(mn) {
-        // Use bip39 and derive both keys
-        try {
-          const m = mn || bip39.generateMnemonic();
-          const seedBuffer = await bip39.mnemonicToSeed(m); // Buffer (Node-style) but in browser bip39 returns Uint8Array or Buffer-like
-
-          // EVM: use ethers to derive first account from mnemonic
-          const evmWallet = ethers.Wallet.fromPhrase(m); // ethers available as global
-          const evm = { address: evmWallet.address, privateKey: evmWallet.privateKey };
-
-          // Solana: derive using ed25519-hd-key (path m/44'/501'/0'/0')
-          const seedHex = Buffer.from(seedBuffer).toString("hex"); // ed25519-hd-key expects hex seed
-          const derived = ed25519HdKey.derivePath("m/44'/501'/0'/0'", seedHex);
-          // derived.key is Buffer/Uint8Array of 32 bytes seed for solana
-          const solKey = derived.key;
-          // Build Keypair from seed
-          const kp = solanaWeb3.Keypair.fromSeed(new Uint8Array(solKey));
-          const sol = { address: kp.publicKey.toBase58(), secretBase64: toBase64(kp.secretKey) };
-
-          const state = { mnemonic: m, evm, sol };
-          setWalletState(state);
-          setMnemonic(m);
-          setNotice("Wallet created. Keep your mnemonic safe!");
-        } catch (err) {
-          console.error("create error", err);
-          alert("Failed to create wallet: " + err.message);
-        }
+      async function createEvmWallet() {
+        const randomWallet = ethers.Wallet.createRandom();
+        wallet = {
+          type: "EVM",
+          address: randomWallet.address,
+          privateKey: randomWallet.privateKey,
+        };
+        render();
       }
 
-      async function importFromMnemonic() {
-        if (!importMnemonicInput.trim()) return alert("Enter mnemonic to import");
-        await createWalletFromMnemonic(importMnemonicInput.trim());
-        setImportMnemonicInput("");
+      async function createSolWallet() {
+        const keypair = solanaWeb3.Keypair.generate();
+        wallet = {
+          type: "SOLANA",
+          address: keypair.publicKey.toBase58(),
+          privateKey: Array.from(keypair.secretKey).join(","),
+        };
+        render();
       }
 
-      async function importFromPrivateKey() {
-        const pk = importPrivKeyInput.trim();
-        if (!pk) return alert("Enter private key to import (EVM hex or SOL base64 secret)");
-        // Detect SOL import if it looks like base64 (for secretKey) or if user indicates SOL selected
-        try {
-          if (selectedChain === "SOL") {
-            // Expecting base64 secretKey or 64/128 hex encoded secret? We'll support base64 of 64 bytes (secretKey)
-            let secretArr;
-            try {
-              secretArr = fromBase64ToUint8(pk);
-            } catch (e) {
-              // try hex
-              const hex = pk.replace(/^0x/, "");
-              const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(b => parseInt(b,16)));
-              secretArr = bytes;
-            }
-            const kp = solanaWeb3.Keypair.fromSecretKey(secretArr);
-            const state = { mnemonic: null, evm: null, sol: { address: kp.publicKey.toBase58(), secretBase64: toBase64(kp.secretKey) } };
-            setWalletState(state);
-            setImportPrivKeyInput("");
-            setNotice("Imported Solana key (private key).");
-            return;
-          } else {
-            // EVM import — expects hex private key like 0x...
-            const w = new ethers.Wallet(pk);
-            const state = { mnemonic: null, evm: { address: w.address, privateKey: w.privateKey }, sol: null };
-            setWalletState(state);
-            setImportPrivKeyInput("");
-            setNotice("Imported EVM private key.");
-            return;
-          }
-        } catch (err) {
-          console.error("import pk err", err);
-          alert("Failed to import private key: " + err.message);
-        }
-      }
-
-      function logout() {
-        setWalletState(null);
-        setMnemonic("");
-        setSolHistory([]);
-        setEvmHistory([]);
-        setNotice("");
-      }
-
-      // ---------- Utility: copy to clipboard ----------
-      async function copy(text) {
-        await navigator.clipboard.writeText(text);
-        setNotice("Copied to clipboard");
-        setTimeout(() => setNotice(""), 2000);
-      }
-
-      // ---------- Send functions ----------
-      async function sendTransaction() {
-        if (!walletState) return alert("No wallet loaded");
-        if (!txTo || !txAmount) return alert("Enter recipient and amount");
-
-        if (selectedChain === "SOL") {
-          await sendSolTransaction();
+      function render() {
+        if (!wallet) {
+          app.innerHTML = `
+            <button onclick="createEvmWallet()">Create EVM Wallet</button>
+            <button onclick="createSolWallet()">Create Solana Wallet</button>
+          `;
         } else {
-          await sendEvmTransaction();
+          app.innerHTML = `
+            <p><b>Type:</b> ${wallet.type}</p>
+            <p><b>Address:</b> ${wallet.address}</p>
+            <p><b>Private Key:</b> ${wallet.privateKey}</p>
+            <button onclick="wallet=null; render()">Back</button>
+          `;
         }
       }
 
-      // EVM send (uses public RPC for chosen chain)
-      async function sendEvmTransaction() {
-        try {
-          setSending(true);
-          const chain = RPCS[selectedChain];
-          const provider = new ethers.JsonRpcProvider(chain.rpc);
-          // signer from private key
-          let priv = walletState.evm?.privateKey;
-          if (!priv) {
-            // if mnemonic-only, derive from mnemonic
-            if (walletState.mnemonic) {
-              const derived = ethers.Wallet.fromPhrase(walletState.mnemonic);
-              priv = derived.privateKey;
-            } else {
-              throw new Error("No EVM private key available for sending");
-            }
-          }
-          const wallet = new ethers.Wallet(priv, provider);
-          // convert amount to wei according to chain's decimals (ETH-like 18)
-          const value = ethers.parseUnits(txAmount, 18);
-          const tx = await wallet.sendTransaction({ to: txTo, value });
-          setNotice("Broadcasted TX: " + tx.hash);
-          // Optionally add to local history
-          setEvmHistory(prev => [{ hash: tx.hash, to: txTo, value: txAmount, time: Date.now() }, ...prev].slice(0,20));
-        } catch (err) {
-          console.error("evm send err", err);
-          alert("EVM send failed: " + (err?.message || err));
-        } finally {
-          setSending(false);
-        }
-      }
+      window.createEvmWallet = createEvmWallet;
+      window.createSolWallet = createSolWallet;
 
-      // Solana send
-      async function sendSolTransaction() {
-        try {
-          setSending(true);
-          const conn = new solanaWeb3.Connection(RPCS.SOL.rpc, "confirmed");
-          // Load Keypair from stored secret
-          const secret = fromBase64ToUint8(walletState.sol.secretBase64);
-          const kp = solanaWeb3.Keypair.fromSecretKey(secret);
-          const toPub = new solanaWeb3.PublicKey(txTo);
-          const lamports = Math.round(parseFloat(txAmount) * solanaWeb3.LAMPORTS_PER_SOL);
-          const tx = new solanaWeb3.Transaction().add(
-            solanaWeb3.SystemProgram.transfer({
-              fromPubkey: kp.publicKey,
-              toPubkey: toPub,
-              lamports,
-            })
-          );
-          const sig = await solanaWeb3.sendAndConfirmTransaction(conn, tx, [kp]);
-          setNotice("Solana tx: " + sig);
-          // refresh history
-          await fetchSolHistory();
-        } catch (err) {
-          console.error("sol send err", err);
-          alert("Solana send failed: " + (err?.message || err));
-        } finally {
-          setSending(false);
-        }
-      }
-
-      // ---------- Solana History ----------
-      async function fetchSolHistory() {
-        if (!walletState?.sol?.address) return;
-        try {
-          const conn = new solanaWeb3.Connection(RPCS.SOL.rpc, "confirmed");
-          const pub = new solanaWeb3.PublicKey(walletState.sol.address);
-          // get signatures
-          const sigs = await conn.getSignaturesForAddress(pub, { limit: 12 });
-          const history = [];
-          for (const s of sigs) {
-            const parsed = await conn.getParsedTransaction(s.signature);
-            history.push({ sig: s.signature, slot: s.slot, err: s.err, meta: parsed?.meta });
-          }
-          setSolHistory(history);
-        } catch (err) {
-          console.error("fetch sol history", err);
-        }
-      }
-
-      // ---------- EVM History (placeholder) ----------
-      // NOTE: ethers providers do not return address tx history.
-      // For EVM tx history use Etherscan/BscScan APIs or a service provider (Alchemy, Covalent, Ankr).
-      // Example (Etherscan): https://api.etherscan.io/api?module=account&action=txlist&address=...&startblock=0&endblock=99999999&sort=desc&apikey=YOUR_KEY
-      // Add code below to call your chosen scanner + API key and populate evmHistory.
-      async function fetchEvmHistoryPlaceholder() {
-        setEvmHistory([]); // placeholder
-        setNotice("To show EVM history add Etherscan/BscScan API integration (see instructions).");
-      }
-
-      // ---------- UI ----------
-      return (
-        <div className="space-y-6">
-          <header className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">VaultChain — EVM + Solana (Web)</h1>
-            <div className="text-sm text-slate-300">Test / Prototype</div>
-          </header>
-
-          <section className="bg-white/5 p-4 rounded-lg">
-            <div className="flex gap-2 mb-3">
-              {Object.keys(RPCS).map(k => (
-                <button
-                  key={k}
-                  onClick={() => setSelectedChain(k)}
-                  className={`px-3 py-1 rounded ${selectedChain===k ? 'bg-indigo-600' : 'bg-white/5'}`}
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <h2 className="font-semibold mb-2">Create / Import (mnemonic-derived)</h2>
-                <div className="flex gap-2 mb-2">
-                  <button className="bg-green-600 px-3 py-1 rounded" onClick={() => createWalletFromMnemonic()}>Create New</button>
-                  <button className="bg-yellow-600 px-3 py-1 rounded" onClick={() => { const m = prompt("Paste a mnemonic (12/24 words)"); if (m) createWalletFromMnemonic(m.trim()); }}>Create from Mnemonic</button>
-                </div>
-
-                <div className="space-y-2">
-                  <input placeholder="Paste mnemonic to import" value={importMnemonicInput} onChange={(e)=>setImportMnemonicInput(e.target.value)} className="w-full p-2 rounded bg-white/5"/>
-                  <div className="flex gap-2">
-                    <button className="bg-blue-600 px-3 py-1 rounded" onClick={importFromMnemonic}>Import Mnemonic</button>
-                    <input placeholder="Or paste private key (hex for EVM / base64 for Solana)" value={importPrivKeyInput} onChange={(e)=>setImportPrivKeyInput(e.target.value)} className="flex-1 p-2 rounded bg-white/5"/>
-                    <button className="bg-blue-800 px-3 py-1 rounded" onClick={importFromPrivateKey}>Import Key</button>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <div className="text-sm text-slate-300">Loaded Wallet:</div>
-                  {walletState ? (
-                    <div className="mt-2 space-y-1">
-                      <div>Mnemonic: <span className="font-mono text-xs text-emerald-300">{walletState.mnemonic || "—"}</span></div>
-                      <div>EVM Addr: <span className="font-mono">{walletState.evm?.address || "—"}</span></div>
-                      <div>Sol Addr: <span className="font-mono">{walletState.sol?.address || "—"}</span></div>
-                      <div className="flex gap-2 mt-2">
-                        <button className="bg-slate-700 px-2 py-1 rounded" onClick={()=>copy(walletState.evm?.address || "")}>Copy EVM</button>
-                        <button className="bg-slate-700 px-2 py-1 rounded" onClick={()=>copy(walletState.sol?.address || "")}>Copy SOL</button>
-                        <button className="bg-red-600 px-2 py-1 rounded" onClick={logout}>Logout</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-slate-400 mt-2">No wallet loaded</div>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <h2 className="font-semibold mb-2">Receive / Send</h2>
-
-                <div className="mb-2">
-                  <div className="text-sm text-slate-300">Receive address</div>
-                  <div className="bg-white/5 p-2 rounded mt-1 font-mono break-words">
-                    {selectedChain === "SOL" ? (walletState?.sol?.address || "—") : (walletState?.evm?.address || "—")}
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    <button className="bg-indigo-600 px-3 py-1 rounded" onClick={()=>copy(selectedChain === "SOL" ? walletState?.sol?.address : walletState?.evm?.address)}>Copy Address</button>
-                    <button className="bg-emerald-600 px-3 py-1 rounded" onClick={()=>{
-                      if(selectedChain==="SOL") { const conn = new solanaWeb3.Connection(RPCS.SOL.rpc); conn.requestAirdrop(new solanaWeb3.PublicKey(walletState?.sol?.address), 0.01*solanaWeb3.LAMPORTS_PER_SOL).then(sig=>alert("Attempted airdrop (dev/test networks only): "+sig)).catch(e=>alert("Airdrop not available on mainnet"));
-                    } else alert("For EVM test funds use a faucet or send from exchange");}}>Request (dev/test)</button>
-                  </div>
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  <input placeholder="Recipient address" value={txTo} onChange={(e)=>setTxTo(e.target.value)} className="w-full p-2 rounded bg-white/5"/>
-                  <input placeholder="Amount (e.g. 0.01)" value={txAmount} onChange={(e)=>setTxAmount(e.target.value)} className="w-full p-2 rounded bg-white/5"/>
-                  <div className="flex gap-2">
-                    <button className="bg-amber-600 px-3 py-1 rounded" onClick={sendTransaction} disabled={sending}>{sending ? "Sending..." : "Send"}</button>
-                    <button className="bg-slate-700 px-3 py-1 rounded" onClick={()=>{ setTxTo(''); setTxAmount(''); }}>Clear</button>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <div className="text-sm text-slate-300">Last activity</div>
-                  <div className="mt-2 space-y-2">
-                    {selectedChain === "SOL" ? (
-                      solHistory.length ? solHistory.map(h => (
-                        <div key={h.sig} className="bg-white/5 p-2 rounded text-xs">
-                          <div>Sig: <a className="underline" href={RPCS.SOL.explorerPrefix + h.sig} target="_blank">{h.sig.substring(0,10)}...</a></div>
-                          <div>Slot: {h.slot}</div>
-                          <div>Err: {h.err ? JSON.stringify(h.err) : "none"}</div>
-                        </div>
-                      )) : <div className="text-sm text-slate-400">No Solana history (or not loaded)</div>
-                    ) : (
-                      evmHistory.length ? evmHistory.map((t,i) => (
-                        <div key={i} className="bg-white/5 p-2 rounded text-xs">
-                          <div>Hash: <a href={RPCS[selectedChain].explorerPrefix + t.hash} target="_blank" className="underline">{t.hash}</a></div>
-                          <div>To: {t.to}</div>
-                          <div>Value: {t.value}</div>
-                        </div>
-                      )) : <div className="text-sm text-slate-400">EVM history not available — add Etherscan/BscScan/Covalent API to fetch.</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <footer className="text-sm text-slate-400">
-            <div>{notice}</div>
-            <div className="mt-2">Notes: This is a test/prototype. For production use secure storage, no client-side plaintext private keys, and reliable RPC providers (Alchemy/QuickNode/Ankr). EVM history requires a scanner API (Etherscan/ Covalent / Alchemy).</div>
-          </footer>
-        </div>
-      );
-    }
-
-    ReactDOM.render(<App />, document.getElementById("root"));
-  </script>
-</body>
+      render();
+    </script>
+  </body>
 </html>
