@@ -3,171 +3,172 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>VaultChain Web — Multi-chain (EVM + Solana) Prototype</title>
+  <title>VaultChain — Browser Multi-chain Wallet (Prototype)</title>
 
-  <!-- UI: Tailwind CDN (optional; minimal styling used) -->
+  <!-- Tailwind for quick UI -->
   <script src="https://cdn.tailwindcss.com"></script>
 
-  <!-- Libraries (UMD builds) - load in order so globals exist -->
+  <!-- UMD/browser builds -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.4/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/dist/web3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bip39@3.0.4/browser.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ed25519-hd-key@1.2.0/dist/index.umd.js"></script>
 
   <style>
-    body { background: linear-gradient(135deg,#0f172a,#0f172a 40%, #3b82f6); color: #ecfeff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-    .card { background: rgba(255,255,255,0.06); border-radius: 12px; padding: 16px; }
+    body { background: linear-gradient(135deg,#0f172a,#111827 60%); color: #e6eef8; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    .card { background: rgba(255,255,255,0.04); border-radius: 12px; padding: 16px; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace; }
-    a{ color: #bfdbfe }
-    button { cursor: pointer; }
+    a { color: #93c5fd; }
   </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4">
-  <div class="max-w-3xl w-full space-y-6">
+<body class="min-h-screen flex items-start justify-center py-8 px-4">
+  <div class="w-full max-w-3xl space-y-6">
     <header class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold">VaultChain Web (Prototype)</h1>
-      <div class="text-sm opacity-80">EVM + Solana</div>
+      <div>
+        <h1 class="text-2xl font-bold">VaultChain — Multi-chain Wallet (Prototype)</h1>
+        <div class="text-xs text-slate-300 mt-1">EVM + Solana — browser-only prototype</div>
+      </div>
+      <div class="text-xs text-slate-400">Prototype • Use carefully</div>
     </header>
 
     <main class="card space-y-4">
       <div class="flex gap-2 flex-wrap">
-        <button id="btnCreate" class="px-3 py-1 bg-emerald-600 rounded">Create Wallet (mnemonic)</button>
-        <button id="btnImportMnemonic" class="px-3 py-1 bg-yellow-600 rounded">Import Mnemonic</button>
-        <button id="btnImportPriv" class="px-3 py-1 bg-sky-600 rounded">Import Private Key</button>
-        <button id="btnLogout" class="px-3 py-1 bg-red-600 rounded">Logout / Clear</button>
+        <button id="createBtn" class="px-3 py-2 bg-emerald-600 rounded">Create Wallet</button>
+        <button id="importMnemonicBtn" class="px-3 py-2 bg-yellow-600 rounded">Import Mnemonic</button>
+        <button id="importKeyBtn" class="px-3 py-2 bg-sky-600 rounded">Import Private Key</button>
+        <button id="logoutBtn" class="px-3 py-2 bg-red-600 rounded">Logout / Clear</button>
       </div>
 
-      <div class="grid md:grid-cols-2 gap-4">
+      <div class="grid md:grid-cols-2 gap-6">
         <section>
-          <h2 class="font-semibold">Selected Chain</h2>
-          <div class="flex gap-2 mt-2">
-            <button class="chainBtn px-2 py-1 bg-indigo-600 rounded" data-chain="ETH">ETH</button>
-            <button class="chainBtn px-2 py-1 bg-indigo-600 rounded" data-chain="BSC">BSC</button>
-            <button class="chainBtn px-2 py-1 bg-indigo-600 rounded" data-chain="AVAX">AVAX</button>
-            <button class="chainBtn px-2 py-1 bg-indigo-600 rounded" data-chain="BASE">BASE</button>
-            <button class="chainBtn px-2 py-1 bg-indigo-600 rounded" data-chain="SOL">SOL</button>
+          <h2 class="font-semibold mb-2">Chains</h2>
+          <div id="chains" class="flex gap-2 flex-wrap">
+            <!-- Buttons injected by script -->
           </div>
 
           <div class="mt-4">
-            <div class="text-sm opacity-80">Loaded wallet</div>
+            <div class="text-sm text-slate-300">Loaded wallet</div>
             <div id="loaded" class="mt-2 text-sm mono">No wallet loaded</div>
             <div class="flex gap-2 mt-3">
-              <button id="copyAddr" class="px-3 py-1 bg-slate-700 rounded">Copy Address</button>
-              <button id="showMnemonic" class="px-3 py-1 bg-slate-700 rounded">Show Mnemonic</button>
+              <button id="copyAddrBtn" class="px-3 py-1 bg-slate-700 rounded">Copy Address</button>
+              <button id="showMnemonicBtn" class="px-3 py-1 bg-slate-700 rounded">Show Mnemonic</button>
             </div>
           </div>
         </section>
 
         <section>
-          <h2 class="font-semibold">Receive / Send</h2>
+          <h2 class="font-semibold mb-2">Receive / Send</h2>
 
-          <div class="mt-2">
-            <div class="text-xs opacity-80">Receive Address</div>
+          <div>
+            <div class="text-xs text-slate-300">Receive address</div>
             <div id="receiveAddr" class="mt-1 mono p-2 bg-white/5 rounded break-words">—</div>
             <div class="flex gap-2 mt-2">
-              <button id="btnCopyRec" class="px-3 py-1 bg-indigo-600 rounded">Copy</button>
-              <button id="btnRequest" class="px-3 py-1 bg-emerald-600 rounded">Request (dev only)</button>
+              <button id="copyRecBtn" class="px-3 py-1 bg-indigo-600 rounded">Copy</button>
+              <button id="requestBtn" class="px-3 py-1 bg-emerald-600 rounded">Request (dev only)</button>
             </div>
           </div>
 
           <div class="mt-4">
-            <div class="text-xs opacity-80">Send</div>
-            <input id="inputTo" placeholder="Recipient address" class="w-full mt-2 p-2 rounded bg-white/5 mono"/>
-            <input id="inputAmount" placeholder="Amount (e.g. 0.01)" class="w-full mt-2 p-2 rounded bg-white/5 mono"/>
+            <div class="text-xs text-slate-300">Send</div>
+            <input id="toInput" placeholder="Recipient address" class="w-full mt-2 p-2 rounded bg-white/5 mono"/>
+            <input id="amountInput" placeholder="Amount (example: 0.01)" class="w-full mt-2 p-2 rounded bg-white/5 mono"/>
             <div class="flex gap-2 mt-2">
-              <button id="btnSend" class="px-3 py-1 bg-amber-500 rounded">Send</button>
-              <button id="btnClearSend" class="px-3 py-1 bg-slate-700 rounded">Clear</button>
+              <button id="sendBtn" class="px-3 py-1 bg-amber-500 rounded">Send</button>
+              <button id="clearSendBtn" class="px-3 py-1 bg-slate-700 rounded">Clear</button>
             </div>
-            <div id="sendNotice" class="text-xs mt-2 opacity-80"></div>
+            <div id="sendNotice" class="text-xs mt-2 text-slate-300"></div>
           </div>
-
         </section>
       </div>
 
       <section>
-        <h3 class="font-semibold">Balances & History</h3>
-        <div class="mt-2 grid md:grid-cols-2 gap-4">
+        <h3 class="font-semibold mb-2">Balances & History</h3>
+        <div class="grid md:grid-cols-2 gap-4">
           <div>
-            <div class="text-xs opacity-80">Balance</div>
+            <div class="text-xs text-slate-300">Balance</div>
             <div id="balance" class="mono mt-1 p-2 bg-white/5 rounded">—</div>
-            <div class="text-xs mt-2 opacity-60">(EVM balances use public RPC nodes; Solana uses mainnet RPC)</div>
+            <div class="text-xs mt-2 text-slate-400">EVM balances via public RPC; Solana via mainnet RPC</div>
           </div>
           <div>
-            <div class="text-xs opacity-80">Solana History (last ~10)</div>
+            <div class="text-xs text-slate-300">Solana History (last ~10)</div>
             <div id="solHistory" class="mt-1 space-y-2 text-xs"></div>
-            <div class="mt-2 text-xs opacity-60">EVM history requires a scanner API (Etherscan/Covalent/Alchemy) — see notes below.</div>
+            <div class="text-xs mt-2 text-slate-400">EVM history requires a scanner API (Etherscan/Covalent/Alchemy). See notes.</div>
           </div>
         </div>
       </section>
 
-      <section class="text-xs opacity-70">
+      <section class="text-xs text-slate-400">
         <strong>Notes:</strong>
         <ul class="list-disc ml-5">
-          <li>This is a prototype — do NOT use main funds for testing unless you know what you are doing.</li>
-          <li>For production: use secure vault storage, HTTPS, and paid RPC providers (Alchemy/QuickNode/Ankr) and a tx indexing service for EVM history.</li>
+          <li>This is a prototype — do NOT use large amounts of real funds unless you know what you’re doing.</li>
+          <li>For production: encrypt the mnemonic, use secure vaults, and paid RPC + indexers for reliability.</li>
         </ul>
       </section>
     </main>
   </div>
 
   <script>
-    // ======= Configuration (RPCs, helpers) =======
-    const RPCS = {
-      ETH: { name: "Ethereum", rpc: "https://rpc.ankr.com/eth", symbol: "ETH", explorer: "https://etherscan.io/tx/" },
-      BSC: { name: "BNB Smart Chain", rpc: "https://bsc-dataseed.binance.org/", symbol: "BNB", explorer: "https://bscscan.com/tx/" },
-      AVAX: { name: "Avalanche C-Chain", rpc: "https://api.avax.network/ext/bc/C/rpc", symbol: "AVAX", explorer: "https://snowtrace.io/tx/" },
-      BASE:{ name: "Base", rpc: "https://mainnet.base.org", symbol: "ETH", explorer: "https://basescan.org/tx/" },
-      SOL: { name: "Solana", rpc: "https://api.mainnet-beta.solana.com", symbol: "SOL", explorer: "https://explorer.solana.com/tx/" }
+  (function(){
+    // ---------- Configuration ----------
+    const CHAINS = {
+      ETH: { id: 'ETH', name: 'Ethereum', rpc: 'https://rpc.ankr.com/eth', symbol: 'ETH', explorer: 'https://etherscan.io/tx/' },
+      BSC: { id: 'BSC', name: 'BNB Smart Chain', rpc: 'https://bsc-dataseed.binance.org/', symbol: 'BNB', explorer: 'https://bscscan.com/tx/' },
+      AVAX: { id: 'AVAX', name: 'Avalanche C-Chain', rpc: 'https://api.avax.network/ext/bc/C/rpc', symbol: 'AVAX', explorer: 'https://snowtrace.io/tx/' },
+      BASE:{ id: 'BASE', name: 'Base', rpc: 'https://mainnet.base.org', symbol: 'ETH', explorer: 'https://basescan.org/tx/' },
+      SOL: { id: 'SOL', name: 'Solana', rpc: 'https://api.mainnet-beta.solana.com', symbol: 'SOL', explorer: 'https://explorer.solana.com/tx/' }
     };
 
-    // Globals / UI nodes
-    const btnCreate = document.getElementById('btnCreate');
-    const btnImportMnemonic = document.getElementById('btnImportMnemonic');
-    const btnImportPriv = document.getElementById('btnImportPriv');
-    const btnLogout = document.getElementById('btnLogout');
+    // ---------- DOM ----------
+    const createBtn = document.getElementById('createBtn');
+    const importMnemonicBtn = document.getElementById('importMnemonicBtn');
+    const importKeyBtn = document.getElementById('importKeyBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const chainsDiv = document.getElementById('chains');
     const loadedDiv = document.getElementById('loaded');
     const receiveAddrDiv = document.getElementById('receiveAddr');
     const balanceDiv = document.getElementById('balance');
     const solHistoryDiv = document.getElementById('solHistory');
-    const chainBtns = document.querySelectorAll('.chainBtn');
-    const btnCopyRec = document.getElementById('btnCopyRec');
-    const btnRequest = document.getElementById('btnRequest');
-    const btnSend = document.getElementById('btnSend');
-    const inputTo = document.getElementById('inputTo');
-    const inputAmount = document.getElementById('inputAmount');
+    const copyRecBtn = document.getElementById('copyRecBtn');
+    const requestBtn = document.getElementById('requestBtn');
+    const sendBtn = document.getElementById('sendBtn');
+    const toInput = document.getElementById('toInput');
+    const amountInput = document.getElementById('amountInput');
     const sendNotice = document.getElementById('sendNotice');
-    const btnCopyAddr = document.getElementById('copyAddr');
-    const btnShowMnemonic = document.getElementById('showMnemonic');
-    const btnClearSend = document.getElementById('btnClearSend');
+    const copyAddrBtn = document.getElementById('copyAddrBtn');
+    const showMnemonicBtn = document.getElementById('showMnemonicBtn');
+    const clearSendBtn = document.getElementById('clearSendBtn');
 
+    // ---------- State ----------
     let selectedChain = 'ETH';
-    let state = loadStateFromStorage(); // { mnemonic, evm:{address,privateKey}, sol:{address, secretBase64} }
+    // state stored in localStorage as 'vc_wallet'
+    // structure: { mnemonic: string|null, evm: { address, privateKey } | null, sol: { address, secretBase64 } | null }
+    let state = loadState();
 
-    // Ensure libs loaded
-    if (!window.ethers || !window.bip39 || !window.ed25519HdKey || !window.solanaWeb3) {
-      alert('One or more libraries failed to load. Make sure you are on HTTPS and CDN loaded correctly.');
-    }
-
-    // ======= Utility helpers =======
-    function saveStateToStorage(s) {
-      if (!s) { localStorage.removeItem('vc_wallet'); return; }
-      localStorage.setItem('vc_wallet', JSON.stringify(s));
-    }
-    function loadStateFromStorage() {
-      try {
-        const t = localStorage.getItem('vc_wallet');
-        return t ? JSON.parse(t) : null;
-      } catch(e){ return null; }
-    }
+    // ---------- Helpers ----------
+    function saveState(s){ if(!s) localStorage.removeItem('vc_wallet'); else localStorage.setItem('vc_wallet', JSON.stringify(s)); }
+    function loadState(){ try{ const s = localStorage.getItem('vc_wallet'); return s ? JSON.parse(s) : null }catch(e){return null} }
     function toBase64(u8){ return btoa(String.fromCharCode(...u8)); }
-    function fromBase64(s){ const b = atob(s); return new Uint8Array(Array.from(b).map(ch=>ch.charCodeAt(0))); }
-    async function copyToClipboard(txt){ try { await navigator.clipboard.writeText(txt); alert('Copied'); } catch(e){ alert('Copy failed'); } }
-    function setNotice(msg){ sendNotice.textContent = msg; setTimeout(()=>{ if (sendNotice.textContent===msg) sendNotice.textContent=''; }, 4000); }
+    function fromBase64(s){ const b = atob(s); const arr = new Uint8Array(b.length); for (let i=0;i<b.length;i++) arr[i]=b.charCodeAt(i); return arr; }
+    async function copyToClipboard(text){ try{ await navigator.clipboard.writeText(text); alert('Copied'); }catch(e){ alert('Copy failed'); } }
+    function setNotice(msg){ sendNotice.textContent = msg; setTimeout(()=>{ if(sendNotice.textContent===msg) sendNotice.textContent=''; }, 4000); }
 
-    // ======= UI state render =======
+    // ---------- Render chain buttons ----------
+    function renderChainButtons(){
+      chainsDiv.innerHTML = '';
+      Object.values(CHAINS).forEach(c => {
+        const btn = document.createElement('button');
+        btn.textContent = c.id;
+        btn.className = 'px-3 py-1 rounded bg-indigo-600';
+        btn.dataset.chain = c.id;
+        if (c.id === selectedChain) btn.classList.add('ring-2','ring-offset-1');
+        btn.addEventListener('click', ()=>{ selectedChain = c.id; renderUI(); });
+        chainsDiv.appendChild(btn);
+      });
+    }
+
+    // ---------- UI render ----------
     async function renderUI(){
-      // highlight selected chain buttons
-      chainBtns.forEach(b => b.classList.toggle('ring-2', b.dataset.chain === selectedChain));
+      renderChainButtons();
 
       if (!state) {
         loadedDiv.textContent = 'No wallet loaded';
@@ -177,223 +178,242 @@
         return;
       }
 
-      // show wallet info
-      const mn = state.mnemonic ? state.mnemonic : '—';
+      const mn = state.mnemonic ?? '—';
       const evmAddr = state.evm?.address ?? '—';
       const solAddr = state.sol?.address ?? '—';
       loadedDiv.innerHTML = `Mnemonic: <span class="mono text-xs">${mn}</span><br/>EVM: <span class="mono">${evmAddr}</span><br/>SOL: <span class="mono">${solAddr}</span>`;
 
-      // receive address = per selected chain
-      const rec = (selectedChain === 'SOL') ? solAddr : evmAddr;
-      receiveAddrDiv.textContent = rec;
+      // receive address based on selected chain
+      receiveAddrDiv.textContent = selectedChain === 'SOL' ? solAddr : evmAddr;
 
-      // show balance for selected chain
+      // update balances
       await updateBalance();
 
-      // if SOL selected, fetch sol history
+      // show sol history if SOL selected
       if (selectedChain === 'SOL') {
         await fetchSolHistory();
       } else {
-        solHistoryDiv.innerHTML = '<div class="opacity-70">Switch to SOL to view Solana history. EVM history requires a scanner API (Etherscan/Covalent/Alchemy).</div>';
+        solHistoryDiv.innerHTML = '<div class="text-xs text-slate-400">Switch to SOL to view Solana history. EVM history requires an indexer API (Etherscan / Covalent / Alchemy).</div>';
       }
     }
 
-    // ======= Create / Import / Logout =======
-    btnCreate.onclick = async ()=>{
-      // create new mnemonic and derive both EVM and Solana
+    // ---------- Create / Import ----------
+    createBtn.onclick = async ()=>{
       try {
-        const mnemonic = window.ethers.Wallet.createRandom().mnemonic.phrase;
+        // create mnemonic using bip39 browser build
+        const mnemonic = bip39.generateMnemonic();
         await createFromMnemonic(mnemonic);
-        setNotice('Wallet created');
-      } catch(err){ console.error(err); alert('Create failed: '+err.message); }
+        setNotice('Wallet created. Save your mnemonic securely.');
+      } catch(err){
+        console.error(err);
+        alert('Create failed: ' + (err?.message || err));
+      }
     };
 
-    btnImportMnemonic.onclick = async ()=>{
-      const m = prompt('Paste your mnemonic (12/24 words)');
+    importMnemonicBtn.onclick = async ()=>{
+      const m = prompt('Paste mnemonic (12/24 words)');
       if (!m) return;
       try {
         await createFromMnemonic(m.trim());
-        setNotice('Imported mnemonic');
-      } catch(err){ console.error(err); alert('Import failed: '+err.message); }
+        setNotice('Mnemonic imported');
+      } catch(err){ console.error(err); alert('Import failed: ' + (err?.message || err)); }
     };
 
-    btnImportPriv.onclick = async ()=>{
-      const pk = prompt('Paste private key (EVM hex like 0x... or Solana base64 secretKey)');
-      if (!pk) return;
+    importKeyBtn.onclick = async ()=>{
+      const k = prompt('Paste private key: EVM hex (0x...) or Solana base64 secretKey or comma-separated bytes');
+      if (!k) return;
       try {
         if (selectedChain === 'SOL') {
-          // accept base64 or comma-separated numbers
+          // support base64, hex, or comma-separated bytes
           let secret;
-          if (pk.includes(',')) {
-            // comma separated numbers (from earlier quick create)
-            const arr = pk.split(',').map(x=>parseInt(x,10));
+          if (k.includes(',')) {
+            const arr = k.split(',').map(x => parseInt(x,10));
             secret = new Uint8Array(arr);
           } else {
-            // assume base64 or hex
-            try { secret = fromBase64(pk); } catch(e){
-              // hex fallback
-              const hex = pk.replace(/^0x/,'');
-              const arr = new Uint8Array(hex.match(/.{1,2}/g).map(b=>parseInt(b,16)));
-              secret = arr;
+            try { secret = fromBase64(k); } catch(e){
+              // try hex
+              const hex = k.replace(/^0x/,'');
+              const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(b => parseInt(b,16)));
+              secret = bytes;
             }
           }
-          const kp = window.solanaWeb3.Keypair.fromSecretKey(secret);
-          state = { mnemonic: null, evm: null, sol: { address: kp.publicKey.toBase58(), secretBase64: toBase64(kp.secretKey) } };
-          saveStateToStorage(state);
+          const kp = solanaWeb3.Keypair.fromSecretKey(secret);
+          state = { mnemonic: null, evm: state?.evm ?? null, sol: { address: kp.publicKey.toBase58(), secretBase64: toBase64(kp.secretKey) } };
+          saveState(state);
           await renderUI();
           setNotice('Imported Solana private key');
         } else {
           // EVM import
-          const w = new window.ethers.Wallet(pk);
+          const w = new ethers.Wallet(k);
           state = { mnemonic: null, evm: { address: w.address, privateKey: w.privateKey }, sol: state?.sol ?? null };
-          saveStateToStorage(state);
+          saveState(state);
           await renderUI();
           setNotice('Imported EVM private key');
         }
-      } catch(err){ console.error(err); alert('Import key failed: '+err.message); }
+      } catch(err){ console.error(err); alert('Import key failed: ' + (err?.message || err)); }
     };
 
-    btnLogout.onclick = ()=>{ if(confirm('Clear wallet from browser? Make sure you saved mnemonic/private key.')) { state=null; saveStateToStorage(null); renderUI(); } };
+    logoutBtn.onclick = ()=> {
+      if (!state) { alert('No wallet loaded'); return; }
+      if (confirm('Clear wallet from browser? Make sure you have saved your mnemonic/private key.')) {
+        state = null;
+        saveState(null);
+        renderUI();
+        setNotice('Cleared wallet from browser storage');
+      }
+    };
 
-    // createFromMnemonic: derive both EVM and Solana from same mnemonic
+    // ---------- Derive from mnemonic for both EVM & SOL ----------
     async function createFromMnemonic(mnemonic){
       // EVM: use ethers to derive first account
-      const hd = window.ethers.HDNodeWallet.fromPhrase ? window.ethers.HDNodeWallet.fromPhrase(mnemonic) : window.ethers.Wallet.fromPhrase(mnemonic); // v6 compatibility
-      const evmPrivate = hd.privateKey || (hd.signingKey && hd.signingKey.privateKey) || hd._signingKey?.privateKey;
-      const evmAddress = hd.address || hd.publicAddress || (new window.ethers.Wallet(evmPrivate)).address;
+      // ethers v6 has Wallet.fromPhrase; helper fallback for older variations
+      let evmWallet;
+      try { evmWallet = ethers.Wallet.fromPhrase(mnemonic); } catch(e){
+        try { evmWallet = ethers.Wallet.fromMnemonic(mnemonic); } catch(e2){ throw new Error('Ethers wallet derivation failed'); }
+      }
+      const evmAddress = evmWallet.address;
+      const evmPrivateKey = evmWallet.privateKey;
 
-      // Solana: derive via bip39 -> seed -> ed25519-hd-key derivePath m/44'/501'/0'/0'
-      const seedBuf = await window.bip39.mnemonicToSeed(mnemonic); // returns Buffer/Uint8Array
-      const seedHex = Array.from(seedBuf).map(b=>b.toString(16).padStart(2,'0')).join('');
-      const derived = window.ed25519HdKey.derivePath("m/44'/501'/0'/0'", seedHex);
-      const key = derived.key; // Buffer / Uint8Array 32
-      const kp = window.solanaWeb3.Keypair.fromSeed(new Uint8Array(key));
-      const solSecret = toBase64(kp.secretKey);
+      // Solana: seed derived via bip39 -> seed -> ed25519-hd-key derivePath
+      const seedBuf = await bip39.mnemonicToSeed(mnemonic); // returns Buffer/Uint8Array
+      // convert to hex for ed25519-hd-key
+      const seedHex = Array.from(seedBuf).map(b => b.toString(16).padStart(2,'0')).join('');
+      const derived = ed25519HdKey.derivePath("m/44'/501'/0'/0'", seedHex);
+      const key = derived.key; // Uint8Array/Buffer (32)
+      const kp = solanaWeb3.Keypair.fromSeed(new Uint8Array(key));
+      const solSecretBase64 = toBase64(kp.secretKey);
 
       state = {
         mnemonic,
-        evm: { address: evmAddress, privateKey: evmPrivate },
-        sol: { address: kp.publicKey.toBase58(), secretBase64: solSecret }
+        evm: { address: evmAddress, privateKey: evmPrivateKey },
+        sol: { address: kp.publicKey.toBase58(), secretBase64: solSecretBase64 }
       };
-      saveStateToStorage(state);
+      saveState(state);
       await renderUI();
     }
 
-    // ======= Chain switching =======
-    document.querySelectorAll('.chainBtn').forEach(b => {
-      b.addEventListener('click', (e) => {
-        selectedChain = e.currentTarget.dataset.chain;
-        renderUI();
-      });
-    });
-
-    btnCopyRec.onclick = ()=> copyToClipboard(receiveAddrDiv.textContent || '');
-    btnCopyAddr.onclick = ()=> {
-      if (!state) return alert('No wallet loaded');
-      const addr = state.evm?.address ?? state.sol?.address;
-      copyToClipboard(addr);
-    };
-    btnShowMnemonic.onclick = ()=> {
-      if (!state) return alert('No wallet');
-      alert('Mnemonic: ' + (state.mnemonic ?? 'No mnemonic stored (imported privateKey)'));
-    };
-
-    // ======= Balances =======
+    // ---------- Balance updates ----------
     async function updateBalance(){
       try {
         if (!state) { balanceDiv.textContent = '—'; return; }
         if (selectedChain === 'SOL') {
-          if (!state.sol?.address) { balanceDiv.textContent='—'; return; }
-          const conn = new window.solanaWeb3.Connection(RPCS.SOL.rpc, 'confirmed');
-          const bal = await conn.getBalance(new window.solanaWeb3.PublicKey(state.sol.address));
-          balanceDiv.textContent = (bal / window.solanaWeb3.LAMPORTS_PER_SOL) + ' SOL';
+          if (!state.sol?.address) { balanceDiv.textContent = '—'; return; }
+          const conn = new solanaWeb3.Connection(CHAINS.SOL.rpc, 'confirmed');
+          const bal = await conn.getBalance(new solanaWeb3.PublicKey(state.sol.address));
+          balanceDiv.textContent = (bal / solanaWeb3.LAMPORTS_PER_SOL) + ' SOL';
         } else {
-          if (!state.evm?.address && !state.mnemonic) { balanceDiv.textContent = '—'; return; }
-          const provider = new window.ethers.JsonRpcProvider(RPCS[selectedChain].rpc);
-          const addr = state.evm?.address ?? (state.mnemonic ? (window.ethers.Wallet.fromPhrase ? window.ethers.Wallet.fromPhrase(state.mnemonic).address : window.ethers.Wallet.fromMnemonic(state.mnemonic).address) : null);
-          if (!addr) { balanceDiv.textContent='—'; return; }
+          const rpc = CHAINS[selectedChain].rpc;
+          const provider = new ethers.JsonRpcProvider(rpc);
+          const addr = state.evm?.address ?? (state.mnemonic ? (ethers.Wallet.fromPhrase ? ethers.Wallet.fromPhrase(state.mnemonic).address : ethers.Wallet.fromMnemonic(state.mnemonic).address) : null);
+          if (!addr) { balanceDiv.textContent = '—'; return; }
           const b = await provider.getBalance(addr);
-          balanceDiv.textContent = window.ethers.formatEther(b) + ' ' + RPCS[selectedChain].symbol;
+          balanceDiv.textContent = ethers.formatEther(b) + ' ' + CHAINS[selectedChain].symbol;
         }
-      } catch(err) { console.error('balance err', err); balanceDiv.textContent = 'error'; }
+      } catch(err){ console.error('balance error', err); balanceDiv.textContent = 'error'; }
     }
 
-    // ======= Send Txn =======
-    btnSend.onclick = async ()=>{
+    // ---------- Send functions ----------
+    sendBtn.onclick = async ()=>{
       if (!state) return alert('No wallet loaded');
-      const to = inputTo.value.trim();
-      const amount = inputAmount.value.trim();
+      const to = toInput.value.trim();
+      const amount = amountInput.value.trim();
       if (!to || !amount) return alert('Enter recipient and amount');
 
       if (selectedChain === 'SOL') {
-        // send Sol
-        try {
-          setNotice('Sending SOL...');
-          const conn = new window.solanaWeb3.Connection(RPCS.SOL.rpc, 'confirmed');
-          const secret = fromBase64(state.sol.secretBase64);
-          const kp = window.solanaWeb3.Keypair.fromSecretKey(secret);
-          const tx = new window.solanaWeb3.Transaction().add(
-            window.solanaWeb3.SystemProgram.transfer({
-              fromPubkey: kp.publicKey,
-              toPubkey: new window.solanaWeb3.PublicKey(to),
-              lamports: Math.round(parseFloat(amount) * window.solanaWeb3.LAMPORTS_PER_SOL)
-            })
-          );
-          const sig = await window.solanaWeb3.sendAndConfirmTransaction(conn, tx, [kp]);
-          setNotice('Sent SOL: ' + sig);
-          await updateBalance();
-          await fetchSolHistory();
-        } catch(err){ console.error(err); alert('Sol send failed: ' + (err.message || err)); setNotice(''); }
+        await sendSol(state, to, amount);
       } else {
-        // EVM send
-        try {
-          setNotice('Sending EVM tx...');
-          const provider = new window.ethers.JsonRpcProvider(RPCS[selectedChain].rpc);
-          let priv = state.evm?.privateKey;
-          if (!priv && state.mnemonic) {
-            // derive from mnemonic
-            const w = window.ethers.Wallet.fromPhrase ? window.ethers.Wallet.fromPhrase(state.mnemonic) : window.ethers.Wallet.fromMnemonic(state.mnemonic);
-            priv = w.privateKey;
-          }
-          if (!priv) throw new Error('No EVM private key available for sending');
-          const signer = new window.ethers.Wallet(priv, provider);
-          const tx = await signer.sendTransaction({ to, value: window.ethers.parseEther(amount) });
-          setNotice('Broadcasted: ' + tx.hash);
-          // local history add (simple)
-          // TODO: add EVM tx history via scanner API
-          await updateBalance();
-        } catch(err){ console.error(err); alert('EVM send failed: ' + (err.message || err)); setNotice(''); }
+        await sendEvm(state, to, amount);
       }
     };
 
-    btnClearSend.onclick = ()=> { inputTo.value=''; inputAmount.value=''; };
+    async function sendEvm(state, to, amount){
+      try {
+        setNotice('Sending EVM transaction...');
+        const rpc = CHAINS[selectedChain].rpc;
+        const provider = new ethers.JsonRpcProvider(rpc);
+        // get private key: prefer stored evm.pk, else derive from mnemonic
+        let priv = state.evm?.privateKey;
+        if (!priv && state.mnemonic) {
+          const w = ethers.Wallet.fromPhrase ? ethers.Wallet.fromPhrase(state.mnemonic) : ethers.Wallet.fromMnemonic(state.mnemonic);
+          priv = w.privateKey;
+        }
+        if (!priv) throw new Error('No EVM private key available (import or create with mnemonic).');
+        const signer = new ethers.Wallet(priv, provider);
+        const tx = await signer.sendTransaction({ to, value: ethers.parseEther(amount) });
+        setNotice('Broadcasted: ' + tx.hash);
+        // update balance after short delay
+        setTimeout(()=>updateBalance(), 5000);
+      } catch(err){ console.error('evm send', err); alert('EVM send failed: ' + (err?.message || err)); setNotice(''); }
+    }
 
-    // ======= Solana history =======
+    async function sendSol(state, to, amount){
+      try {
+        setNotice('Sending SOL...');
+        const conn = new solanaWeb3.Connection(CHAINS.SOL.rpc, 'confirmed');
+        const secret = fromBase64(state.sol.secretBase64);
+        const kp = solanaWeb3.Keypair.fromSecretKey(secret);
+        const toPub = new solanaWeb3.PublicKey(to);
+        const lamports = Math.round(parseFloat(amount) * solanaWeb3.LAMPORTS_PER_SOL);
+        const tx = new solanaWeb3.Transaction().add(
+          solanaWeb3.SystemProgram.transfer({
+            fromPubkey: kp.publicKey,
+            toPubkey: toPub,
+            lamports,
+          })
+        );
+        const sig = await solanaWeb3.sendAndConfirmTransaction(conn, tx, [kp]);
+        setNotice('Solana tx: ' + sig);
+        await updateBalance();
+        await fetchSolHistory();
+      } catch(err){ console.error('sol send', err); alert('Solana send failed: ' + (err?.message || err)); setNotice(''); }
+    }
+
+    // ---------- Solana history ----------
     async function fetchSolHistory(){
       try {
         solHistoryDiv.innerHTML = 'Loading...';
-        if (!state?.sol?.address) { solHistoryDiv.innerHTML = 'No solana address'; return; }
-        const conn = new window.solanaWeb3.Connection(RPCS.SOL.rpc, 'confirmed');
-        const sigs = await conn.getSignaturesForAddress(new window.solanaWeb3.PublicKey(state.sol.address), { limit: 12 });
-        if (!sigs || !sigs.length) { solHistoryDiv.innerHTML = '<div class="opacity-70">No recent txs</div>'; return; }
+        if (!state?.sol?.address) { solHistoryDiv.innerHTML = '<div class="text-xs text-slate-400">No Solana address</div>'; return; }
+        const conn = new solanaWeb3.Connection(CHAINS.SOL.rpc, 'confirmed');
+        const sigs = await conn.getSignaturesForAddress(new solanaWeb3.PublicKey(state.sol.address), { limit: 12 });
+        if (!sigs || !sigs.length) { solHistoryDiv.innerHTML = '<div class="text-xs text-slate-400">No recent txs</div>'; return; }
         const rows = [];
         for (const s of sigs) {
           const ptx = await conn.getParsedTransaction(s.signature);
-          rows.push(`<div class="p-2 bg-white/4 rounded"><div>Sig: <a target="_blank" href="${RPCS.SOL.explorer + s.signature}" class="underline">${s.signature.substring(0,12)}...</a></div><div>Slot: ${s.slot}</div><div>Err: ${s.err ? JSON.stringify(s.err) : 'none'}</div></div>`);
+          rows.push(`<div class="p-2 bg-white/6 rounded"><div>Sig: <a target="_blank" rel="noreferrer" href="${CHAINS.SOL.explorer + s.signature}" class="underline">${s.signature.substring(0,12)}...</a></div><div>Slot: ${s.slot}</div><div>Err: ${s.err ? JSON.stringify(s.err) : 'none'}</div></div>`);
         }
         solHistoryDiv.innerHTML = rows.join('');
-      } catch(err){ console.error(err); solHistoryDiv.innerHTML = '<div class="opacity-70">History error</div>'; }
+      } catch(err){ console.error('fetch sol history', err); solHistoryDiv.innerHTML = '<div class="text-xs text-slate-400">History error</div>'; }
     }
 
-    // ======= Helpers used earlier but not defined in all scopes =======
-    function fromBase64(s) { const bin = atob(s); const arr = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); return arr; }
+    // ---------- Helpers used in flows ----------
+    function fromBase64(s){ const bin = atob(s); const arr = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); return arr; }
 
-    // ======= Initial render =======
-    (async ()=>{ await renderUI(); })();
+    copyRecBtn.onclick = ()=> copyToClipboard(receiveAddrDiv.textContent || '');
+    requestBtn.onclick = ()=> {
+      // For Solana dev, one could request airdrop on devnet — but we're using mainnet RPC by default
+      alert('Request action: For testing use dev networks or send from an exchange. Airdrop is not available on mainnet.');
+    };
+    copyAddrBtn.onclick = ()=> {
+      if(!state) return alert('No wallet'); copyToClipboard(state.evm?.address ?? state.sol?.address ?? '');
+    };
+    showMnemonicBtn.onclick = ()=> {
+      if(!state) return alert('No wallet'); alert('Mnemonic:\n' + (state.mnemonic ?? 'No mnemonic stored (imported private key only)'));
+    };
+    clearSendBtn.onclick = ()=> { toInput.value=''; amountInput.value=''; };
 
-    // Auto-refresh balances when visible every 30s (optional)
-    setInterval(()=>{ if (document.visibilityState==='visible') updateBalance(); }, 30000);
+    // ---------- Init ----------
+    (async ()=>{
+      renderUI();
+      // auto-refresh balances every 30s
+      setInterval(()=> { if (document.visibilityState==='visible') updateBalance(); }, 30000);
+    })();
 
-    // ======= EVM history note (how to add) =======
-    // To fetch EVM tx history add calls to Etherscan/BscScan/Covalent/Alchemy APIs (they provide account tx list endpoints).
-    // Example (Etherscan): https://api.etherscan.io/
+    // ---------- EVM tx history note ----------
+    // To show EVM history, register for Etherscan/BscScan/Covalent/Alchemy and call their account txlist endpoints:
+    // Etherscan example: https://api.etherscan.io/api?module=account&action=txlist&address=ADDRESS&startblock=0&endblock=99999999&sort=desc&apikey=YOUR_KEY
+    // Add code to call that API and show results in the UI.
+
+  })();
+  </script>
+</body>
+</html>
