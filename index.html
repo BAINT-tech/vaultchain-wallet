@@ -3,16 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VaultChain Wallet</title>
+    <title>VaultChain Wallet - Blockchain Connected</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const { useState } = React;
+        const { useState, useEffect } = React;
+        const { Wallet, Send, Download, History, Settings, Copy, Eye, EyeOff, LogOut, ChevronDown, RefreshCw, ArrowUpRight, ArrowDownLeft } = lucide;
+
         const VaultChainWallet = () => {
           const [wallet, setWallet] = useState(null);
           const [showPrivateKey, setShowPrivateKey] = useState(false);
@@ -23,78 +26,269 @@
           const [copied, setCopied] = useState('');
           const [selectedChain, setSelectedChain] = useState('ETH');
           const [showChainDropdown, setShowChainDropdown] = useState(false);
+          const [currentView, setCurrentView] = useState('wallet');
+          const [sendTo, setSendTo] = useState('');
+          const [sendAmount, setSendAmount] = useState('');
+          const [isTestnet, setIsTestnet] = useState(true);
+          const [transactions, setTransactions] = useState([]);
+          const [isLoading, setIsLoading] = useState(false);
+
           const chains = [
-            { id: 'ETH', name: 'Ethereum', symbol: 'ETH', color: 'from-blue-500 to-purple-600' },
-            { id: 'HYPE', name: 'Hyperliquid', symbol: 'HYPE', color: 'from-cyan-500 to-blue-600' },
-            { id: 'AVAX', name: 'Avalanche', symbol: 'AVAX', color: 'from-red-500 to-pink-600' },
-            { id: 'OKX', name: 'OKX Chain', symbol: 'OKT', color: 'from-gray-700 to-gray-900' },
-            { id: 'BASE', name: 'Base', symbol: 'ETH', color: 'from-blue-600 to-indigo-700' },
-            { id: 'BNB', name: 'BNB Chain', symbol: 'BNB', color: 'from-yellow-400 to-yellow-600' },
-            { id: 'SOL', name: 'Solana', symbol: 'SOL', color: 'from-purple-500 to-pink-500' },
-            { id: 'PI', name: 'Pi Network', symbol: 'PI', color: 'from-purple-600 to-indigo-800' }
+            { 
+              id: 'ETH', 
+              name: 'Ethereum', 
+              symbol: 'ETH', 
+              color: 'from-blue-500 to-purple-600',
+              mainnetRPC: 'https://eth.llamarpc.com',
+              testnetRPC: 'https://rpc.sepolia.org',
+              explorer: 'https://etherscan.io',
+              testnetExplorer: 'https://sepolia.etherscan.io'
+            },
+            { 
+              id: 'AVAX', 
+              name: 'Avalanche', 
+              symbol: 'AVAX', 
+              color: 'from-red-500 to-pink-600',
+              mainnetRPC: 'https://api.avax.network/ext/bc/C/rpc',
+              testnetRPC: 'https://api.avax-test.network/ext/bc/C/rpc',
+              explorer: 'https://snowtrace.io',
+              testnetExplorer: 'https://testnet.snowtrace.io'
+            },
+            { 
+              id: 'BASE', 
+              name: 'Base', 
+              symbol: 'ETH', 
+              color: 'from-blue-600 to-indigo-700',
+              mainnetRPC: 'https://mainnet.base.org',
+              testnetRPC: 'https://sepolia.base.org',
+              explorer: 'https://basescan.org',
+              testnetExplorer: 'https://sepolia.basescan.org'
+            },
+            { 
+              id: 'BNB', 
+              name: 'BNB Chain', 
+              symbol: 'BNB', 
+              color: 'from-yellow-400 to-yellow-600',
+              mainnetRPC: 'https://bsc-dataseed.binance.org',
+              testnetRPC: 'https://data-seed-prebsc-1-s1.binance.org:8545',
+              explorer: 'https://bscscan.com',
+              testnetExplorer: 'https://testnet.bscscan.com'
+            },
+            { 
+              id: 'SOL', 
+              name: 'Solana', 
+              symbol: 'SOL', 
+              color: 'from-purple-500 to-pink-500',
+              mainnetRPC: 'https://api.mainnet-beta.solana.com',
+              testnetRPC: 'https://api.devnet.solana.com',
+              explorer: 'https://solscan.io',
+              testnetExplorer: 'https://solscan.io?cluster=devnet'
+            }
           ];
+
           const generateSeedPhrase = () => {
-            const wordList = ['abandon','ability','able','about','above','absent','absorb','abstract','absurd','abuse','access','accident','account','accuse','achieve','acid','acoustic','acquire','across','act','action','actor','actress','actual','adapt','add','addict','address','adjust','admit','adult','advance','advice','aerobic','affair','afford','afraid','again','age','agent','agree','ahead','aim','air','airport','aisle','alarm','album','alcohol','alert','alien','all','alley','allow','almost','alone','alpha','already','also','alter','always','amateur','amazing','among','amount','amused','analyst','anchor','ancient','anger','angle','angry','animal','ankle','announce','annual','another','answer','antenna','antique','anxiety','any','apart','apology','appear','apple','approve','april','arch','arctic','area','arena','argue','arm','armed','armor','army','around','arrange','arrest','arrive','arrow','art','artefact','artist','artwork','ask','aspect','assault','asset','assist','assume','asthma','athlete','atom','attack','attend','attitude','attract','auction','audit','august','aunt','author','auto','autumn','average','avocado','avoid','awake','aware','away','awesome','awful','awkward','axis'];
+            const wordList = ['abandon','ability','able','about','above','absent','absorb','abstract','absurd','abuse','access','accident','account','accuse','achieve','acid','acoustic','acquire','across','act','action','actor','actress','actual','adapt','add','addict','address','adjust','admit','adult','advance','advice','aerobic','affair','afford','afraid','again','age','agent','agree','ahead','aim','air','airport','aisle','alarm','album','alcohol','alert','alien','all','alley','allow','almost','alone','alpha','already','also','alter','always','amateur','amazing','among','amount','amused','analyst','anchor','ancient','anger','angle','angry','animal','ankle','announce','annual','another','answer','antenna','antique','anxiety','any','apart','apology','appear','apple','approve','april','arch','arctic','area','arena','argue','arm','armed','armor','army','around','arrange','arrest','arrive','arrow','art','artefact','artist','artwork','ask','aspect','assault','asset','assist','assume','asthma','athlete','atom','attack','attend','attitude','attract','auction'];
             const words = [];
             for (let i = 0; i < 12; i++) {
               words.push(wordList[Math.floor(Math.random() * wordList.length)]);
             }
             return words.join(' ');
           };
+
           const bytesToHex = (bytes) => Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
           const seedToPrivateKey = async (seed) => {
             const encoder = new TextEncoder();
             const data = encoder.encode(seed);
             const hash = await crypto.subtle.digest('SHA-256', data);
             return bytesToHex(new Uint8Array(hash));
           };
+
           const privateKeyToAddress = async (privateKey, chain) => {
             const encoder = new TextEncoder();
             const data = encoder.encode(privateKey + chain);
             const hash = await crypto.subtle.digest('SHA-256', data);
             const hex = bytesToHex(new Uint8Array(hash));
+            
             if (chain === 'SOL') return hex.substring(0, 44);
-            else if (chain === 'PI') return 'G' + hex.substring(0, 55);
             else return '0x' + hex.substring(0, 40);
           };
+
+          const fetchBalance = async (address, chain) => {
+            try {
+              setIsLoading(true);
+              const chainData = chains.find(c => c.id === chain);
+              const rpc = isTestnet ? chainData.testnetRPC : chainData.mainnetRPC;
+              
+              if (chain === 'SOL') {
+                const response = await fetch(rpc, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'getBalance',
+                    params: [address]
+                  })
+                });
+                const data = await response.json();
+                return data.result?.value ? (data.result.value / 1000000000).toFixed(4) : '0.00';
+              } else {
+                const response = await fetch(rpc, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: 1,
+                    method: 'eth_getBalance',
+                    params: [address, 'latest']
+                  })
+                });
+                const data = await response.json();
+                const balance = data.result ? parseInt(data.result, 16) / 1e18 : 0;
+                return balance.toFixed(4);
+              }
+            } catch (error) {
+              console.error('Balance fetch error:', error);
+              return '0.00';
+            } finally {
+              setIsLoading(false);
+            }
+          };
+
           const createWallet = async () => {
             const seedPhrase = generateSeedPhrase();
             const privateKey = await seedToPrivateKey(seedPhrase);
             const address = await privateKeyToAddress(privateKey, selectedChain);
-            setWallet({ seedPhrase, privateKey, addresses: { [selectedChain]: address }, balance: '0.00', currentChain: selectedChain });
+            const balance = await fetchBalance(address, selectedChain);
+            
+            setWallet({
+              seedPhrase,
+              privateKey,
+              addresses: { [selectedChain]: address },
+              balance,
+              currentChain: selectedChain
+            });
           };
+
           const importFromSeedPhrase = async () => {
-            if (!inputSeedPhrase.trim()) { alert('Please enter a seed phrase'); return; }
+            if (!inputSeedPhrase.trim()) {
+              alert('Please enter a seed phrase');
+              return;
+            }
+            
             const privateKey = await seedToPrivateKey(inputSeedPhrase);
             const address = await privateKeyToAddress(privateKey, selectedChain);
-            setWallet({ seedPhrase: inputSeedPhrase, privateKey, addresses: { [selectedChain]: address }, balance: '0.00', currentChain: selectedChain });
+            const balance = await fetchBalance(address, selectedChain);
+            
+            setWallet({
+              seedPhrase: inputSeedPhrase,
+              privateKey,
+              addresses: { [selectedChain]: address },
+              balance,
+              currentChain: selectedChain
+            });
             setInputSeedPhrase('');
           };
+
           const importFromPrivateKey = async () => {
-            if (!inputPrivateKey.trim()) { alert('Please enter a private key'); return; }
+            if (!inputPrivateKey.trim()) {
+              alert('Please enter a private key');
+              return;
+            }
+            
             const address = await privateKeyToAddress(inputPrivateKey, selectedChain);
-            setWallet({ seedPhrase: null, privateKey: inputPrivateKey, addresses: { [selectedChain]: address }, balance: '0.00', currentChain: selectedChain });
+            const balance = await fetchBalance(address, selectedChain);
+            
+            setWallet({
+              seedPhrase: null,
+              privateKey: inputPrivateKey,
+              addresses: { [selectedChain]: address },
+              balance,
+              currentChain: selectedChain
+            });
             setInputPrivateKey('');
           };
+
           const switchChain = async (chainId) => {
             if (!wallet.addresses[chainId]) {
               const newAddress = await privateKeyToAddress(wallet.privateKey, chainId);
-              setWallet({ ...wallet, addresses: { ...wallet.addresses, [chainId]: newAddress }, currentChain: chainId });
+              const balance = await fetchBalance(newAddress, chainId);
+              setWallet({
+                ...wallet,
+                addresses: { ...wallet.addresses, [chainId]: newAddress },
+                balance,
+                currentChain: chainId
+              });
             } else {
-              setWallet({ ...wallet, currentChain: chainId });
+              const balance = await fetchBalance(wallet.addresses[chainId], chainId);
+              setWallet({ ...wallet, balance, currentChain: chainId });
             }
             setShowChainDropdown(false);
           };
-          const logout = () => {
-            if (confirm('Are you sure you want to logout? Make sure you have saved your seed phrase and private key.')) {
-              setWallet(null); setShowPrivateKey(false); setShowSeedPhrase(false);
+
+          const refreshBalance = async () => {
+            if (!wallet) return;
+            const address = wallet.addresses[wallet.currentChain];
+            const balance = await fetchBalance(address, wallet.currentChain);
+            setWallet({ ...wallet, balance });
+          };
+
+          const sendTransaction = async () => {
+            if (!sendTo || !sendAmount) {
+              alert('Please enter recipient address and amount');
+              return;
+            }
+
+            try {
+              setIsLoading(true);
+              const chainData = chains.find(c => c.id === wallet.currentChain);
+              
+              const newTx = {
+                id: Date.now(),
+                from: wallet.addresses[wallet.currentChain],
+                to: sendTo,
+                amount: sendAmount,
+                symbol: chainData.symbol,
+                timestamp: new Date().toISOString(),
+                status: 'pending',
+                type: 'send',
+                network: isTestnet ? 'Testnet' : 'Mainnet'
+              };
+              
+              setTransactions([newTx, ...transactions]);
+              alert('Transaction submitted! (Demo mode - no real transfer)');
+              setSendTo('');
+              setSendAmount('');
+              setCurrentView('wallet');
+              
+              setTimeout(() => {
+                setTransactions(prev => prev.map(tx => 
+                  tx.id === newTx.id ? { ...tx, status: 'confirmed' } : tx
+                ));
+              }, 3000);
+            } catch (error) {
+              alert('Transaction failed: ' + error.message);
+            } finally {
+              setIsLoading(false);
             }
           };
+
+          const logout = () => {
+            if (confirm('Are you sure you want to logout? Make sure you have saved your seed phrase and private key.')) {
+              setWallet(null);
+              setShowPrivateKey(false);
+              setShowSeedPhrase(false);
+              setTransactions([]);
+            }
+          };
+
           const copyToClipboard = (text, label) => {
             navigator.clipboard.writeText(text);
             setCopied(label);
             setTimeout(() => setCopied(''), 2000);
           };
+
           if (!wallet) {
             return (
               <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
@@ -102,31 +296,50 @@
                   <div className="text-center mb-8">
                     <div className="flex justify-center mb-4">
                       <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-4 rounded-full">
-                        <div className="w-12 h-12 text-white text-4xl">💼</div>
+                        <div className="w-12 h-12 text-4xl">💼</div>
                       </div>
                     </div>
                     <h1 className="text-3xl font-bold text-gray-800 mb-2">VaultChain Wallet</h1>
-                    <p className="text-gray-600">Your secure multi-chain wallet</p>
+                    <p className="text-gray-600">Blockchain-Connected Multi-Chain Wallet</p>
                   </div>
+
                   <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-2">Select Network</label>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       {chains.map((chain) => (
-                        <button key={chain.id} onClick={() => setSelectedChain(chain.id)} className={`p-3 rounded-lg border-2 transition ${selectedChain === chain.id ? 'border-purple-600 bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                        <button
+                          key={chain.id}
+                          onClick={() => setSelectedChain(chain.id)}
+                          className={`p-3 rounded-lg border-2 transition ${selectedChain === chain.id ? 'border-purple-600 bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}
+                        >
                           <div className="text-xs font-semibold text-gray-800">{chain.id}</div>
                           <div className="text-xs text-gray-500">{chain.symbol}</div>
                         </button>
                       ))}
                     </div>
                   </div>
+
                   <div className="flex gap-2 mb-6">
-                    <button onClick={() => setActiveTab('create')} className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${activeTab === 'create' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Create</button>
-                    <button onClick={() => setActiveTab('import')} className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${activeTab === 'import' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Import</button>
+                    <button
+                      onClick={() => setActiveTab('create')}
+                      className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${activeTab === 'create' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      Create
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('import')}
+                      className={`flex-1 py-2 px-4 rounded-lg font-medium transition ${activeTab === 'import' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      Import
+                    </button>
                   </div>
+
                   {activeTab === 'create' ? (
                     <div className="space-y-4">
-                      <button onClick={createWallet} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition">🔒 Create New Wallet</button>
-                      <p className="text-sm text-gray-500 text-center">Generate a new wallet with a secure seed phrase</p>
+                      <button onClick={createWallet} className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition">
+                        🔒 Create New Wallet
+                      </button>
+                      <p className="text-sm text-gray-500 text-center">Generate a new wallet with blockchain connection</p>
                     </div>
                   ) : (
                     <div className="space-y-6">
@@ -135,10 +348,12 @@
                         <textarea value={inputSeedPhrase} onChange={(e) => setInputSeedPhrase(e.target.value)} placeholder="Enter your 12-word seed phrase" className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent" rows="3" />
                         <button onClick={importFromSeedPhrase} className="w-full mt-2 bg-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-purple-700 transition">Import from Seed</button>
                       </div>
+
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300"></div></div>
                         <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">OR</span></div>
                       </div>
+
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Import with Private Key</label>
                         <input type="password" value={inputPrivateKey} onChange={(e) => setInputPrivateKey(e.target.value)} placeholder="Enter your private key" className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
@@ -150,8 +365,10 @@
               </div>
             );
           }
+
           const currentChain = chains.find(c => c.id === wallet.currentChain);
           const currentAddress = wallet.addresses[wallet.currentChain];
+
           return (
             <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
               <div className="max-w-2xl mx-auto py-8">
@@ -162,8 +379,19 @@
                         <div className="text-3xl">💼</div>
                         <h1 className="text-2xl font-bold">VaultChain</h1>
                       </div>
-                      <button onClick={logout} className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition text-sm">🚪 Logout</button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setIsTestnet(!isTestnet)}
+                          className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-3 py-1 rounded-lg transition text-xs"
+                        >
+                          {isTestnet ? '🧪 Testnet' : '🌐 Mainnet'}
+                        </button>
+                        <button onClick={logout} className="flex items-center gap-2 bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition text-sm">
+                          🚪
+                        </button>
+                      </div>
                     </div>
+
                     <div className="relative mb-4">
                       <button onClick={() => setShowChainDropdown(!showChainDropdown)} className="w-full bg-white/20 hover:bg-white/30 rounded-lg p-3 flex items-center justify-between transition">
                         <div className="flex items-center gap-2">
@@ -173,6 +401,7 @@
                         </div>
                         <span className={`transition-transform ${showChainDropdown ? 'rotate-180' : ''}`}>▼</span>
                       </button>
+                      
                       {showChainDropdown && (
                         <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-xl overflow-hidden z-10">
                           {chains.map((chain) => (
@@ -188,66 +417,227 @@
                         </div>
                       )}
                     </div>
+
                     <div className="bg-white/10 rounded-lg p-4">
-                      <p className="text-sm opacity-80 mb-1">Balance</p>
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-sm opacity-80">Balance</p>
+                        <button onClick={refreshBalance} disabled={isLoading} className="text-white/80 hover:text-white text-sm">
+                          {isLoading ? '⏳' : '🔄'}
+                        </button>
+                      </div>
                       <p className="text-3xl font-bold">{wallet.balance} {currentChain.symbol}</p>
                     </div>
-                  </div>
-                  <div className="p-6 space-y-6">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-700">Wallet Address ({currentChain.id})</label>
-                        <button onClick={() => copyToClipboard(currentAddress, 'address')} className="text-purple-600 hover:text-purple-700 text-sm">{copied === 'address' ? '✅ Copied!' : '📋 Copy'}</button>
-                      </div>
-                      <div className="bg-gray-100 rounded-lg p-3 font-mono text-sm break-all">{currentAddress}</div>
+
+                    <div className="grid grid-cols-3 gap-2 mt-4">
+                      <button onClick={() => setCurrentView('send')} className="bg-white/20 hover:bg-white/30 rounded-lg p-3 flex flex-col items-center gap-1 transition">
+                        <span className="text-xl">📤</span>
+                        <span className="text-xs">Send</span>
+                      </button>
+                      <button onClick={() => setCurrentView('receive')} className="bg-white/20 hover:bg-white/30 rounded-lg p-3 flex flex-col items-center gap-1 transition">
+                        <span className="text-xl">📥</span>
+                        <span className="text-xs">Receive</span>
+                      </button>
+                      <button onClick={() => setCurrentView('history')} className="bg-white/20 hover:bg-white/30 rounded-lg p-3 flex flex-col items-center gap-1 transition">
+                        <span className="text-xl">📜</span>
+                        <span className="text-xs">History</span>
+                      </button>
                     </div>
-                    {wallet.seedPhrase && (
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-sm font-medium text-gray-700">Seed Phrase</label>
-                          <div className="flex gap-2">
-                            <button onClick={() => setShowSeedPhrase(!showSeedPhrase)} className="text-purple-600 hover:text-purple-700 text-sm">{showSeedPhrase ? '🙈 Hide' : '👁️ Show'}</button>
-                            {showSeedPhrase && (<button onClick={() => copyToClipboard(wallet.seedPhrase, 'seed')} className="text-purple-600 hover:text-purple-700 text-sm">{copied === 'seed' ? '✅ Copied!' : '📋 Copy'}</button>)}
+                  </div>
+
+                  <div className="p-6">
+                    {currentView === 'wallet' && (
+                      <div className="space-y-6">
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-sm font-medium text-gray-700">Wallet Address ({currentChain.id})</label>
+                            <button onClick={() => copyToClipboard(currentAddress, 'address')} className="text-purple-600 hover:text-purple-700 text-sm">
+                              {copied === 'address' ? '✅ Copied!' : '📋 Copy'}
+                            </button>
                           </div>
+                          <div className="bg-gray-100 rounded-lg p-3 font-mono text-sm break-all">{currentAddress}</div>
                         </div>
-                        <div className="bg-gray-100 rounded-lg p-3">
-                          {showSeedPhrase ? (
-                            <div className="grid grid-cols-3 gap-2">
-                              {wallet.seedPhrase.split(' ').map((word, idx) => (
-                                <div key={idx} className="bg-white rounded p-2 text-sm"><span className="text-gray-400">{idx + 1}.</span> {word}</div>
-                              ))}
+
+                        {wallet.seedPhrase && (
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="text-sm font-medium text-gray-700">Seed Phrase</label>
+                              <div className="flex gap-2">
+                                <button onClick={() => setShowSeedPhrase(!showSeedPhrase)} className="text-purple-600 hover:text-purple-700 text-sm">
+                                  {showSeedPhrase ? '🙈 Hide' : '👁️ Show'}
+                                </button>
+                                {showSeedPhrase && (
+                                  <button onClick={() => copyToClipboard(wallet.seedPhrase, 'seed')} className="text-purple-600 hover:text-purple-700 text-sm">
+                                    {copied === 'seed' ? '✅ Copied!' : '📋 Copy'}
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          ) : (<p className="text-gray-400 text-sm">••••••••••••••••••••</p>)}
+                            <div className="bg-gray-100 rounded-lg p-3">
+                              {showSeedPhrase ? (
+                                <div className="grid grid-cols-3 gap-2">
+                                  {wallet.seedPhrase.split(' ').map((word, idx) => (
+                                    <div key={idx} className="bg-white rounded p-2 text-sm">
+                                      <span className="text-gray-400">{idx + 1}.</span> {word}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-gray-400 text-sm">••••••••••••••••••••</p>
+                              )}
+                            </div>
+                            <p className="text-xs text-red-600 mt-2">⚠️ Never share your seed phrase with anyone!</p>
+                          </div>
+                        )}
+
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <h3 className="font-semibold text-blue-900 mb-2">🔐 Network Info</h3>
+                          <ul className="text-sm text-blue-800 space-y-1">
+                            <li>• Network: {isTestnet ? 'Testnet' : 'Mainnet'}</li>
+                            <li>• Chain: {currentChain.name}</li>
+                            <li>• Connected to RPC</li>
+                          </ul>
                         </div>
-                        <p className="text-xs text-red-600 mt-2">⚠️ Never share your seed phrase with anyone!</p>
                       </div>
                     )}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-gray-700">Private Key</label>
-                        <div className="flex gap-2">
-                          <button onClick={() => setShowPrivateKey(!showPrivateKey)} className="text-purple-600 hover:text-purple-700 text-sm">{showPrivateKey ? '🙈 Hide' : '👁️ Show'}</button>
-                          {showPrivateKey && (<button onClick={() => copyToClipboard(wallet.privateKey, 'key')} className="text-purple-600 hover:text-purple-700 text-sm">{copied === 'key' ? '✅ Copied!' : '📋 Copy'}</button>)}
+
+                    {currentView === 'send' && (
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-xl font-bold text-gray-800">Send {currentChain.symbol}</h2>
+                          <button onClick={() => setCurrentView('wallet')} className="text-gray-600 hover:text-gray-800 text-2xl">✕</button>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Recipient Address</label>
+                          <input
+                            type="text"
+                            value={sendTo}
+                            onChange={(e) => setSendTo(e.target.value)}
+                            placeholder="0x..."
+                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
+                          <input
+                            type="number"
+                            value={sendAmount}
+                            onChange={(e) => setSendAmount(e.target.value)}
+                            placeholder="0.0"
+                            step="0.0001"
+                            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Available: {wallet.balance} {currentChain.symbol}</p>
+                        </div>
+
+                        <button
+                          onClick={sendTransaction}
+                          disabled={isLoading}
+                          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition disabled:opacity-50"
+                        >
+                          {isLoading ? 'Processing...' : 'Send Transaction'}
+                        </button>
+
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                          <p className="text-xs text-yellow-800">
+                            ⚠️ Demo Mode: This will simulate a transaction but not actually send funds.
+                          </p>
                         </div>
                       </div>
-                      <div className="bg-gray-100 rounded-lg p-3 font-mono text-sm break-all">{showPrivateKey ? wallet.privateKey : '••••••••••••••••••••••••••••••••'}</div>
-                      <p className="text-xs text-red-600 mt-2">⚠️ Never share your private key with anyone!</p>
-                    </div>
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <h3 className="font-semibold text-blue-900 mb-2">🔐 Security Tips</h3>
-                      <ul className="text-sm text-blue-800 space-y-1">
-                        <li>• Keep your seed phrase and private key safe offline</li>
-                        <li>• Never share your credentials with anyone</li>
-                        <li>• This is a demo wallet - do not use for real crypto</li>
-                      </ul>
-                    </div>
+                    )}
+
+                    {currentView === 'receive' && (
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-xl font-bold text-gray-800">Receive {currentChain.symbol}</h2>
+                          <button onClick={() => setCurrentView('wallet')} className="text-gray-600 hover:text-gray-800 text-2xl">✕</button>
+                        </div>
+
+                        <div className="bg-gray-100 rounded-lg p-6 text-center">
+                          <div className="bg-white p-4 rounded-lg inline-block mb-4">
+                            <div className="w-48 h-48 flex items-center justify-center text-6xl">
+                              📱
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-4">Scan QR code or copy address below</p>
+                          <div className="bg-white rounded-lg p-3 font-mono text-sm break-all border border-gray-300">
+                            {currentAddress}
+                          </div>
+                          <button
+                            onClick={() => copyToClipboard(currentAddress, 'receive')}
+                            className="mt-4 bg-purple-600 text-white py-2 px-6 rounded-lg font-medium hover:bg-purple-700 transition"
+                          >
+                            {copied === 'receive' ? '✅ Copied!' : '📋 Copy Address'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {currentView === 'history' && (
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-xl font-bold text-gray-800">Transaction History</h2>
+                          <button onClick={() => setCurrentView('wallet')} className="text-gray-600 hover:text-gray-800 text-2xl">✕</button>
+                        </div>
+
+                        {transactions.length === 0 ? (
+                          <div className="text-center py-12">
+                            <div className="text-6xl mb-4">📜</div>
+                            <p className="text-gray-500">No transactions yet</p>
+                            <p className="text-sm text-gray-400 mt-2">Your transaction history will appear here</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {transactions.map((tx) => (
+                              <div key={tx.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-purple-300 transition">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex items-start gap-3">
+                                    <div className={`p-2 rounded-full ${tx.type === 'send' ? 'bg-red-100' : 'bg-green-100'}`}>
+                                      <span className="text-xl">{tx.type === 'send' ? '↗️' : '↙️'}</span>
+                                    </div>
+                                    <div>
+                                      <p className="font-semibold text-gray-800">
+                                        {tx.type === 'send' ? 'Sent' : 'Received'} {tx.symbol}
+                                      </p>
+                                      <p className="text-sm text-gray-500 font-mono">
+                                        {tx.type === 'send' ? `To: ${tx.to.substring(0, 10)}...` : `From: ${tx.from.substring(0, 10)}...`}
+                                      </p>
+                                      <p className="text-xs text-gray-400 mt-1">
+                                        {new Date(tx.timestamp).toLocaleString()} • {tx.network}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className={`font-bold ${tx.type === 'send' ? 'text-red-600' : 'text-green-600'}`}>
+                                      {tx.type === 'send' ? '-' : '+'}{tx.amount} {tx.symbol}
+                                    </p>
+                                    <span className={`text-xs px-2 py-1 rounded-full ${
+                                      tx.status === 'confirmed' ? 'bg-green-100 text-green-700' : 
+                                      tx.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 
+                                      'bg-red-100 text-red-700'
+                                    }`}>
+                                      {tx.status}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
           );
         };
+
         ReactDOM.render(<VaultChainWallet />, document.getElementById('root'));
+    </script>
+    <script>
+        lucide.createIcons();
     </script>
 </body>
 </html>
